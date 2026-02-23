@@ -67,6 +67,7 @@ def handle_agent(conn, addr):
     try:
         # Receive and validate registration
         registration = receive_message(conn)
+        print(f"[MASTER] Registration payload from {addr}: {registration}")
         if not registration or registration.get("type") != "register":
             raise Exception("Invalid registration message")
 
@@ -107,7 +108,8 @@ def handle_agent(conn, addr):
                 print(f"[MASTER] Task: {task_id}, Files: {len(files)}")
 
             elif msg_type == "heartbeat":
-                # Keep-alive; no action required
+                # Keep-alive; touch handled above. Log and dispatch queued items.
+                print(f"[MASTER] Heartbeat from {agent_ip}")
                 _dispatch_queued_delete_commands(agent_ip, conn)
                 _dispatch_queued_tasks(agent_ip, conn)
 
