@@ -4,7 +4,7 @@ import logging
 
 # Configuration
 CONFIG = {
-    'MASTER_IP': os.getenv('MASTER_IP', '127.0.0.1'),
+    'MASTER_IP': os.getenv('MASTER_IP', '10.17.63.28'),
     'MASTER_PORT': int(os.getenv('MASTER_PORT', 5000)),
     'CLIENT_ID': os.getenv('CLIENT_ID', socket.gethostname()),
     'SCAN_DIRECTORIES': os.getenv('SCAN_DIRS', r'C:\Users\user\Downloads\Network_rprojct').split(','),
