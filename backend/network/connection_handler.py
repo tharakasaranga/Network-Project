@@ -42,6 +42,25 @@ def _dispatch_queued_delete_commands(agent_ip, conn):
             print(f"[MASTER] Failed queued delete command {cmd_id} -> {agent_ip}: {e}")
             break
 
+
+def _dispatch_queued_tasks(agent_ip, conn):
+    if not persistence:
+        return
+
+    persistence.init_db()
+    tasks = persistence.fetch_pending_tasks(agent_ip)
+    for t in tasks:
+        tid = t.get("id")
+        payload = t.get("payload", {})
+        try:
+            send_message(conn, payload)
+            persistence.mark_task_sent(tid)
+            print(f"[MASTER] Sent queued task {tid} -> {agent_ip}")
+        except Exception as e:
+            persistence.mark_task_failed(tid, str(e))
+            print(f"[MASTER] Failed queued task {tid} -> {agent_ip}: {e}")
+            break
+
 def handle_agent(conn, addr):
     agent_ip, _ = addr
 
@@ -51,9 +70,8 @@ def handle_agent(conn, addr):
         if not registration or registration.get("type") != "register":
             raise Exception("Invalid registration message")
 
-        client_id = registration.get("client_id", f"Agent-{agent_ip}")
-        register_agent(agent_ip, conn, addr, client_id)
-        print(f"[MASTER] Agent registered: {agent_ip} ({client_id})")
+        register_agent(agent_ip, conn, addr)
+        print(f"[MASTER] Agent registered: {agent_ip}")
 
         # Dispatch initial task after registration
         dispatch_scan_task(conn, agent_ip)
@@ -91,6 +109,7 @@ def handle_agent(conn, addr):
             elif msg_type == "heartbeat":
                 # Keep-alive; no action required
                 _dispatch_queued_delete_commands(agent_ip, conn)
+                _dispatch_queued_tasks(agent_ip, conn)
 
             elif msg_type == "deletion_report":
                 task_id = message.get("task_id") or "unknown-task"

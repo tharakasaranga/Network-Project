@@ -19,6 +19,9 @@ from backend.network.protocol import send_message
 from backend.network.tcp_server import start_master
 from models import db, DeletionAuditLog
 from shared import persistence
+from backend.orchestrator.result_collector import result_collector
+import uuid
+from datetime import datetime
 
 
 app = Flask(__name__)
@@ -106,6 +109,79 @@ def _group_records_by_agent(records):
 
 def _remove_records_from_queue(records):
     persistence.delete_pending_by_ids([r["id"] for r in records])
+
+
+@app.route('/scan', methods=['POST'])
+def scan():
+    try:
+        data = request.get_json(silent=True) or {}
+        target = data.get('target_language')
+
+        # Build task
+        if target and target != 'Other':
+            # use create_scan_instruction for known languages
+            try:
+                task = create_scan_instruction({target.lower()})
+            except Exception as e:
+                return jsonify({'error': str(e)}), 400
+        else:
+            # custom task
+            task = {
+                'type': 'scan_task',
+                'task_id': f"scan-{uuid.uuid4().hex[:8]}",
+                'custom': {
+                    'name': data.get('custom_name'),
+                    'keywords': data.get('keywords'),
+                    'extension': data.get('extension'),
+                    'pattern': data.get('pattern')
+                },
+                'created_at': datetime.utcnow().isoformat()
+            }
+
+        # Attempt to send to in-memory active agents; if agent not connected, enqueue task
+        active_memory = get_active_agents()
+        sent = 0
+        queued = 0
+        failed = []
+
+        # Use persisted agents list to know which agents to target
+        persisted = persistence.list_agents()
+        for item in persisted:
+            agent_ip = item.get('agent_ip')
+            raw_status = item.get('status', 'OFFLINE')
+            # only target agents not marked OFFLINE in persistence
+            if raw_status == 'OFFLINE':
+                continue
+
+            info = active_memory.get(agent_ip)
+            if info and info.get('conn'):
+                try:
+                    send_message(info['conn'], task)
+                    update_status(agent_ip, 'SCANNING')
+                    sent += 1
+                except Exception:
+                    failed.append(agent_ip)
+            else:
+                # agent not connected right now; enqueue task to be delivered on heartbeat
+                persistence.enqueue_task(agent_ip, task['task_id'], task)
+                queued += 1
+
+        if sent == 0 and queued == 0:
+            return jsonify({'error': 'No active agents available'}), 400
+
+        return jsonify({'task_id': task['task_id'], 'sent_to': sent, 'queued': queued, 'failed_agents': failed, 'results': []})
+    except Exception as e:
+        logger.exception('Error handling scan request')
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@app.route('/scan-results', methods=['GET'])
+def scan_results():
+    task_id = request.args.get('task_id')
+    if not task_id:
+        return jsonify({'error': 'task_id required'}), 400
+    results = result_collector.get_task_results(task_id)
+    return jsonify({'task_id': task_id, 'results': results})
 
 
 def _persist_audit_logs(records, action: str, notes: str = ""):
@@ -196,16 +272,15 @@ def clients_status():
             agent_ip = item.get("agent_ip")
             raw_status = item.get("status", "OFFLINE")
             last_seen_ts = item.get("last_seen")
-            client_id = item.get("client_id", f"Agent {idx}")
             last_seen = None
             if last_seen_ts:
                 last_seen = datetime.fromtimestamp(last_seen_ts, tz=timezone.utc).isoformat()
 
-            # Only show agents seen within the last 60 seconds
+            # only include recently seen agents (within 60s)
             if last_seen_ts and (now - last_seen_ts) < 60:
                 status_list.append({
                     "id": idx,
-                    "name": client_id,
+                    "name": f"Agent {idx}",
                     "ip": agent_ip,
                     "ip_address": agent_ip,
                     "status": "online" if raw_status != "OFFLINE" else "offline",
