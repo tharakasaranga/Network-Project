@@ -1,9 +1,10 @@
 import threading
 import time
 import os
+from datetime import datetime
 
 from config import CONFIG, logger
-from detector import PatternBasedDetector
+from detector import PatternBasedDetector, FileAnalysisResult
 from scanner import FileScanner
 from quarantine import QuarantineManager
 from network.tcp_client import MasterCommunicator
@@ -95,30 +96,108 @@ class ClientAgent:
         # Extract task parameters
         target_languages = task.get('target_languages', ['python', 'matlab', 'perl'])
         date_filter = task.get('date_filter')
+        custom = task.get('custom')
         
         # Scan files
         files = self.scanner.scan(date_filter=date_filter)
-        
+
         # Analyze files
         results = []
         for filepath in files:
-            result = self.detector.analyze_file(filepath)
-            
-            # Only quarantine files whose detected language is in the target set.
-            # This prevents non-target-language files from being quarantined.
-            is_target_language = result.language in target_languages
-            should_quarantine = (
-                (result.decision == 'delete' and is_target_language) or
-                (result.decision == 'ambiguous' and is_target_language and result.confidence >= 0.70)
-            )
+            try:
+                # If this is a custom task (from UI 'Other'), apply simple custom filters.
+                if custom:
+                    matched = False
+                    name = os.path.basename(filepath).lower()
+                    ext = os.path.splitext(name)[1].lstrip('.').lower()
 
-            if should_quarantine:
-                success, quarantine_path = self.quarantine.quarantine_file(filepath)
-                if success:
-                    result.filepath = quarantine_path  # Update to quarantine path
-                    results.append(result)
-                else:
-                    logger.error(f"Failed to quarantine: {filepath}")
+                    # Check extension filter
+                    ext_filter = (custom.get('extension') or '').strip().lower()
+                    if ext_filter:
+                        norm = ext_filter.lstrip('.')
+                        if ext == norm:
+                            matched = True
+
+                    # Check filename/name contains
+                    name_filter = (custom.get('name') or '').strip().lower()
+                    if name_filter and name_filter in name:
+                        matched = True
+
+                    # Check keywords in content
+                    keywords = (custom.get('keywords') or '').strip()
+                    if keywords:
+                        try:
+                            with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                                content = f.read(50000).lower()
+                        except Exception:
+                            content = ''
+                        for kw in [k.strip().lower() for k in keywords.split(',') if k.strip()]:
+                            if kw and kw in content:
+                                matched = True
+                                break
+
+                    # Regex pattern
+                    pattern = (custom.get('pattern') or '').strip()
+                    if pattern and not matched:
+                        try:
+                            import re
+                            with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                                content = f.read(50000)
+                            if re.search(pattern, content, re.MULTILINE):
+                                matched = True
+                        except Exception:
+                            pass
+
+                    if not matched:
+                        continue
+
+                    # If matched by custom rule, quarantine and produce a FileAnalysisResult
+                    success, quarantine_path = self.quarantine.quarantine_file(filepath)
+                    if success:
+                        try:
+                            stat_info = os.stat(quarantine_path)
+                            modified_time = datetime.fromtimestamp(stat_info.st_mtime).isoformat()
+                            size = stat_info.st_size
+                        except Exception:
+                            modified_time = ''
+                            size = 0
+                        file_hash = PatternBasedDetector._calculate_hash(quarantine_path)
+                        results.append(FileAnalysisResult(
+                            filepath=quarantine_path,
+                            filename=os.path.basename(quarantine_path),
+                            size=size,
+                            modified_time=modified_time,
+                            decision='delete',
+                            confidence=0.90,
+                            language='custom',
+                            method='custom-filter',
+                            reason='Matched custom scan criteria',
+                            file_hash=file_hash
+                        ))
+                    else:
+                        logger.error(f"Failed to quarantine: {filepath}")
+                    continue
+
+                # Default path: use detector
+                result = self.detector.analyze_file(filepath)
+                
+                # Only quarantine files whose detected language is in the target set.
+                # This prevents non-target-language files from being quarantined.
+                is_target_language = result.language in target_languages
+                should_quarantine = (
+                    (result.decision == 'delete' and is_target_language) or
+                    (result.decision == 'ambiguous' and is_target_language and result.confidence >= 0.70)
+                )
+
+                if should_quarantine:
+                    success, quarantine_path = self.quarantine.quarantine_file(filepath)
+                    if success:
+                        result.filepath = quarantine_path  # Update to quarantine path
+                        results.append(result)
+                    else:
+                        logger.error(f"Failed to quarantine: {filepath}")
+            except Exception as e:
+                logger.error(f"Error processing {filepath}: {e}")
         
         # Send results to master
         if results:

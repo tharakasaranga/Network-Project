@@ -120,10 +120,28 @@ def init_db():
         conn.close()
 
 
-def upsert_agent(agent_ip: str, status: str):
+def upsert_agent(agent_ip: str, status: str, last_seen: float = None):
+    """
+    Insert or update an agent row. By default, `last_seen` is set to now for
+    status values other than 'OFFLINE'. When marking an agent OFFLINE we
+    preserve the existing last_seen value (so UI filtering by recent
+    activity still works correctly).
+    """
     with _LOCK:
         conn = _connect()
         cur = conn.cursor()
+
+        if last_seen is None:
+            if status == 'OFFLINE':
+                # Preserve existing last_seen if present, otherwise set to 0
+                existing = cur.execute(
+                    "SELECT last_seen FROM persisted_agents WHERE agent_ip=?",
+                    (agent_ip,),
+                ).fetchone()
+                last_seen = float(existing["last_seen"]) if existing else 0.0
+            else:
+                last_seen = time.time()
+
         cur.execute(
             """
             INSERT INTO persisted_agents(agent_ip, status, last_seen)
@@ -132,7 +150,7 @@ def upsert_agent(agent_ip: str, status: str):
                 status=excluded.status,
                 last_seen=excluded.last_seen
             """,
-            (agent_ip, status, time.time()),
+            (agent_ip, status, last_seen),
         )
         conn.commit()
         conn.close()
