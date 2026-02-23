@@ -196,6 +196,7 @@ def clients_status():
             agent_ip = item.get("agent_ip")
             raw_status = item.get("status", "OFFLINE")
             last_seen_ts = item.get("last_seen")
+            client_id = item.get("client_id", f"Agent {idx}")
             last_seen = None
             if last_seen_ts:
                 last_seen = datetime.fromtimestamp(last_seen_ts, tz=timezone.utc).isoformat()
@@ -204,7 +205,7 @@ def clients_status():
             if last_seen_ts and (now - last_seen_ts) < 60:
                 status_list.append({
                     "id": idx,
-                    "name": f"Agent {idx}",
+                    "name": client_id,
                     "ip": agent_ip,
                     "ip_address": agent_ip,
                     "status": "online" if raw_status != "OFFLINE" else "offline",

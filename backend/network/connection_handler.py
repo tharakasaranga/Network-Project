@@ -51,8 +51,9 @@ def handle_agent(conn, addr):
         if not registration or registration.get("type") != "register":
             raise Exception("Invalid registration message")
 
-        register_agent(agent_ip, conn, addr)
-        print(f"[MASTER] Agent registered: {agent_ip}")
+        client_id = registration.get("client_id", f"Agent-{agent_ip}")
+        register_agent(agent_ip, conn, addr, client_id)
+        print(f"[MASTER] Agent registered: {agent_ip} ({client_id})")
 
         # Dispatch initial task after registration
         dispatch_scan_task(conn, agent_ip)

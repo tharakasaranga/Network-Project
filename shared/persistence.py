@@ -48,7 +48,8 @@ def init_db():
             CREATE TABLE IF NOT EXISTS persisted_agents (
                 agent_ip TEXT PRIMARY KEY,
                 status TEXT NOT NULL,
-                last_seen REAL NOT NULL
+                last_seen REAL NOT NULL,
+                client_id TEXT
             )
             """
         )
@@ -106,20 +107,33 @@ def init_db():
         conn.close()
 
 
-def upsert_agent(agent_ip: str, status: str):
+def upsert_agent(agent_ip: str, status: str, client_id: str = None):
     with _LOCK:
         conn = _connect()
         cur = conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO persisted_agents(agent_ip, status, last_seen)
-            VALUES (?, ?, ?)
-            ON CONFLICT(agent_ip) DO UPDATE SET
-                status=excluded.status,
-                last_seen=excluded.last_seen
-            """,
-            (agent_ip, status, time.time()),
-        )
+        if client_id is not None:
+            cur.execute(
+                """
+                INSERT INTO persisted_agents(agent_ip, status, last_seen, client_id)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(agent_ip) DO UPDATE SET
+                    status=excluded.status,
+                    last_seen=excluded.last_seen,
+                    client_id=excluded.client_id
+                """,
+                (agent_ip, status, time.time(), client_id),
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO persisted_agents(agent_ip, status, last_seen, client_id)
+                VALUES (?, ?, ?, NULL)
+                ON CONFLICT(agent_ip) DO UPDATE SET
+                    status=excluded.status,
+                    last_seen=excluded.last_seen
+                """,
+                (agent_ip, status, time.time()),
+            )
         conn.commit()
         conn.close()
 
@@ -145,7 +159,7 @@ def list_agents():
         conn = _connect()
         cur = conn.cursor()
         rows = cur.execute(
-            "SELECT agent_ip, status, last_seen FROM persisted_agents ORDER BY agent_ip"
+            "SELECT agent_ip, status, last_seen, client_id FROM persisted_agents ORDER BY agent_ip"
         ).fetchall()
         conn.close()
         return [dict(row) for row in rows]

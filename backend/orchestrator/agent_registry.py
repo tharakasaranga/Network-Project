@@ -10,17 +10,18 @@ _agents = {}
 _lock = Lock()
 
 
-def register_agent(agent_ip, conn, addr):
+def register_agent(agent_ip, conn, addr, client_id=None):
     with _lock:
         _agents[agent_ip] = {
             "conn": conn,
             "addr": addr,
             "status": "IDLE",
-            "last_seen": time.time()
+            "last_seen": time.time(),
+            "client_id": client_id or f"Agent-{agent_ip}"
         }
     if persistence:
         persistence.init_db()
-        persistence.upsert_agent(agent_ip, "IDLE")
+        persistence.upsert_agent(agent_ip, "IDLE", client_id)
 
 
 def update_status(agent_ip, status):
@@ -28,8 +29,9 @@ def update_status(agent_ip, status):
         if agent_ip in _agents:
             _agents[agent_ip]["status"] = status
             _agents[agent_ip]["last_seen"] = time.time()
+            client_id = _agents[agent_ip].get("client_id")
     if persistence:
-        persistence.upsert_agent(agent_ip, status)
+        persistence.upsert_agent(agent_ip, status, client_id)
 
 
 def touch(agent_ip):
