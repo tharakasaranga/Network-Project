@@ -190,6 +190,7 @@ def submit_instruction():
 def clients_status():
     try:
         status_list = []
+        now = time.time()
 
         for idx, item in enumerate(persistence.list_agents(), start=1):
             agent_ip = item.get("agent_ip")
@@ -199,15 +200,17 @@ def clients_status():
             if last_seen_ts:
                 last_seen = datetime.fromtimestamp(last_seen_ts, tz=timezone.utc).isoformat()
 
-            status_list.append({
-                "id": idx,
-                "name": f"Agent {idx}",
-                "ip": agent_ip,
-                "ip_address": agent_ip,
-                "status": "online" if raw_status != "OFFLINE" else "offline",
-                "raw_status": raw_status,
-                "last_seen": last_seen
-            })
+            # Only show agents seen within the last 60 seconds
+            if last_seen_ts and (now - last_seen_ts) < 60:
+                status_list.append({
+                    "id": idx,
+                    "name": f"Agent {idx}",
+                    "ip": agent_ip,
+                    "ip_address": agent_ip,
+                    "status": "online" if raw_status != "OFFLINE" else "offline",
+                    "raw_status": raw_status,
+                    "last_seen": last_seen
+                })
 
         return jsonify(status_list)
     except Exception as e:
