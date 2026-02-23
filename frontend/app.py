@@ -268,25 +268,37 @@ def clients_status():
         status_list = []
         now = time.time()
 
-        for idx, item in enumerate(persistence.list_agents(), start=1):
-            agent_ip = item.get("agent_ip")
-            raw_status = item.get("status", "OFFLINE")
-            last_seen_ts = item.get("last_seen")
-            last_seen = None
-            if last_seen_ts:
-                last_seen = datetime.fromtimestamp(last_seen_ts, tz=timezone.utc).isoformat()
+        # Load persisted agents into a map for ordering and base data
+        persisted = {p.get('agent_ip'): p for p in persistence.list_agents()}
 
-            # only include recently seen agents (within 60s)
-            if last_seen_ts and (now - last_seen_ts) < 60:
+        # Merge in-memory active agents to ensure currently connected sockets appear
+        active_memory = get_active_agents()
+        for ip, info in active_memory.items():
+            # Update persisted entry or create a synthetic one
+            persisted[ip] = {
+                'agent_ip': ip,
+                'status': info.get('status', 'IDLE'),
+                'last_seen': info.get('last_seen')
+            }
+
+        # Now build the list, but only include those seen within the last 60s
+        idx = 1
+        for agent_ip in sorted(persisted.keys()):
+            item = persisted[agent_ip]
+            raw_status = item.get('status', 'OFFLINE')
+            last_seen_ts = item.get('last_seen') or 0
+            if last_seen_ts and (now - float(last_seen_ts)) < 60:
+                last_seen = datetime.fromtimestamp(float(last_seen_ts), tz=timezone.utc).isoformat()
                 status_list.append({
-                    "id": idx,
-                    "name": f"Agent {idx}",
-                    "ip": agent_ip,
-                    "ip_address": agent_ip,
-                    "status": "online" if raw_status != "OFFLINE" else "offline",
-                    "raw_status": raw_status,
-                    "last_seen": last_seen
+                    'id': idx,
+                    'name': f'Agent {idx}',
+                    'ip': agent_ip,
+                    'ip_address': agent_ip,
+                    'status': 'online' if raw_status != 'OFFLINE' else 'offline',
+                    'raw_status': raw_status,
+                    'last_seen': last_seen
                 })
+                idx += 1
 
         return jsonify(status_list)
     except Exception as e:
