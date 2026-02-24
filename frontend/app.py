@@ -214,9 +214,16 @@ def verification():
 
 @app.route("/submit-instruction", methods=["POST"])
 def submit_instruction():
+    """Accepts a scan instruction from the dashboard UI.
+
+    Previously this endpoint was referred to as "deletion instruction" but
+    it now only dispatches a *scan* task to agents. The client-side code
+    redirects the user to the verification page where any pending files can
+    be approved or rejected for actual deletion.
+    """
     try:
         data = request.get_json(silent=True) or {}
-        logger.info(f"Received submit-instruction data: {data}")  # Debugging
+        logger.info(f"Received scan request data: {data}")  # Debugging
         target_languages = data.get("target_languages", [])
         custom_languages = data.get("custom_languages", [])
 

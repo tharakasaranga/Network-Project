@@ -6,7 +6,7 @@ This is the Admin Web Interface and Backend Logic for the Agent-Based System for
 
 - **Modern, Responsive UI**: Beautiful gradient designs, Font Awesome icons, smooth animations, and mobile-friendly interface with enhanced navigation bar
 - **Dark Mode**: Toggle between light and dark themes with persistent preference storage
-- **Dashboard**: Submit natural language deletion commands and view agent status with real-time statistics
+- **Dashboard**: Configure and dispatch scan instructions (select languages) and view agent status with real-time statistics
 - **File Verification**: Advanced search and filtering, approve/reject with enhanced confirmations
 - **Mock Data**: Automatic generation of test data for development
 - **Comprehensive Logging**: Detailed logging of all actions with timestamps
@@ -25,17 +25,20 @@ This is the Admin Web Interface and Backend Logic for the Agent-Based System for
 ## Setup
 
 1. Create a virtual environment (recommended):
+
    ```
    python -m venv venv
    venv\Scripts\activate  # On Windows
    ```
 
 2. Install dependencies:
+
    ```
    pip install -r requirements.txt
    ```
 
 3. Run the application:
+
    ```
    python app.py
    ```
@@ -47,12 +50,14 @@ The application will generate mock data automatically, so you can test the UI im
 ## UI Highlights
 
 ### Dashboard
+
 - **Statistics Cards**: Real-time counts of total agents, online agents, and pending files with **clickable functionality** to view detailed information
-- **Command Submission**: Enhanced form with validation and loading states
+- **Scan Instruction Form**: Enhanced form with validation, loading state and automatic redirect to verification page
 - **Agent Overview**: Card-based layout with status indicators and last seen timestamps
 - **Enhanced Navigation**: Professional navbar with larger fonts, hover effects, glassmorphism design, and theme toggle
 
 ### Verification Page
+
 - **Advanced Search**: Real-time filtering by filename or path
 - **Enhanced Table**: Sortable columns, hover effects, and status badges
 - **Bulk Actions**: Select all/deselect all with visual feedback
@@ -60,6 +65,7 @@ The application will generate mock data automatically, so you can test the UI im
 - **Responsive Design**: Optimized for desktop and mobile devices
 
 ### Design Elements
+
 - **Color Schemes**: Custom gradients for different statuses and actions
 - **Animations**: Fade-in effects, hover transformations, and smooth transitions
 - **Icons**: Font Awesome icons throughout for better visual hierarchy
@@ -70,7 +76,7 @@ The application will generate mock data automatically, so you can test the UI im
 
 - `GET /`: Dashboard page with enhanced UI
 - `GET /verification`: File verification page with search capabilities
-- `POST /submit-instruction`: Submit a deletion instruction (JSON: `{"instruction": "string"}`)
+- `POST /submit-instruction`: Dispatch a **scan** instruction to agents; UI will redirect to verification page afterwards (JSON: `{"target_languages": [...], "custom_languages": [...]}`)
 - `GET /clients-status`: Get list of agents with status and last seen
 - `GET /files-preview`: Get list of pending files (supports `?search=query`)
 - `POST /approve-deletion`: Approve deletion of files (JSON: `{"file_ids": [1,2,3]}`)
@@ -79,6 +85,7 @@ The application will generate mock data automatically, so you can test the UI im
 ## Interactive Features
 
 ### Clickable Statistics Cards
+
 The dashboard features three interactive statistics cards that provide detailed information when clicked:
 
 - **Total Agents Card**: Shows a table with all agents including ID, name, status, last seen time, and IP address
@@ -88,6 +95,7 @@ The dashboard features three interactive statistics cards that provide detailed 
 Each card opens a Bootstrap modal with a responsive table containing the relevant data. The modals are styled consistently with the application's design theme.
 
 ### Dark Mode Theme
+
 The application includes a comprehensive dark mode theme that can be toggled using the moon/sun icon in the navigation bar:
 
 - **Persistent Theme**: Your theme preference is saved in localStorage and remembered across sessions
@@ -98,12 +106,14 @@ The application includes a comprehensive dark mode theme that can be toggled usi
 ## Database Schema
 
 ### Agents Table
+
 - `id`: Primary key
 - `ip`: Agent IP address
 - `status`: online/offline
 - `last_seen`: Timestamp of last activity
 
 ### FileLogs Table
+
 - `id`: Primary key
 - `filename`: File name
 - `path`: Full file path
