@@ -119,14 +119,26 @@ class ClientAgent:
                     logger.info(f"Network share file detected: {filepath} - sending directly to master")
                     results.append(result)
                 else:
-                    # Local file - try to quarantine
-                    success, quarantine_path = self.quarantine.quarantine_file(filepath)
-                    if success:
-                        result.filepath = quarantine_path  # Update to quarantine path
+                    # Check if on same drive/mount as quarantine directory
+                    try:
+                        file_drive = os.path.splitdrive(filepath)[0]
+                        quarantine_drive = os.path.splitdrive(self.config['QUARANTINE_DIR'])[0]
+                        
+                        if file_drive and quarantine_drive and file_drive.lower() != quarantine_drive.lower():
+                            logger.info(f"File on different drive ({file_drive}) than quarantine ({quarantine_drive}) - sending directly to master")
+                            results.append(result)
+                        else:
+                            # Same drive or cross-platform - try to quarantine
+                            success, quarantine_path = self.quarantine.quarantine_file(filepath)
+                            if success:
+                                result.filepath = quarantine_path
+                                results.append(result)
+                                logger.info(f"Quarantined: {filepath} -> {quarantine_path}")
+                            else:
+                                logger.error(f"Failed to quarantine: {filepath}")
+                    except Exception as e:
+                        logger.error(f"Error checking drives: {e}, sending directly to master")
                         results.append(result)
-                        logger.info(f"Quarantined: {filepath} -> {quarantine_path}")
-                    else:
-                        logger.error(f"Failed to quarantine: {filepath}")
         
         # Send results to master
         logger.info(f"Sending {len(results)} results to master")
