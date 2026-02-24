@@ -128,14 +128,20 @@ class ClientAgent:
                             logger.info(f"File on different drive ({file_drive}) than quarantine ({quarantine_drive}) - sending directly to master")
                             results.append(result)
                         else:
-                            # Same drive or cross-platform - try to quarantine
+                            # Same drive (or unmatched drives due to empty config value) – attempt
+                            # to quarantine; if that fails we still send the entry so the master
+                            # can process it.  Cross‑device move errors inside quarantine
+                            # manager are now handled there, but network issues or permission
+                            # problems could still occur.
                             success, quarantine_path = self.quarantine.quarantine_file(filepath)
                             if success:
                                 result.filepath = quarantine_path
                                 results.append(result)
                                 logger.info(f"Quarantined: {filepath} -> {quarantine_path}")
                             else:
-                                logger.error(f"Failed to quarantine: {filepath}")
+                                logger.error(f"Failed to quarantine: {filepath}, forwarding to master")
+                                # the file still needs analysis by the master, so include it
+                                results.append(result)
                     except Exception as e:
                         logger.error(f"Error checking drives: {e}, sending directly to master")
                         results.append(result)
