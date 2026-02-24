@@ -54,20 +54,6 @@ def init_db():
         )
         cur.execute(
             """
-            CREATE TABLE IF NOT EXISTS task_queue (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                agent_ip TEXT NOT NULL,
-                task_id TEXT NOT NULL,
-                payload_json TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending',
-                created_at TEXT NOT NULL,
-                sent_at TEXT,
-                error TEXT
-            )
-            """
-        )
-        cur.execute(
-            """
             CREATE TABLE IF NOT EXISTS pending_files (
                 id TEXT PRIMARY KEY,
                 task_id TEXT NOT NULL,
@@ -120,28 +106,10 @@ def init_db():
         conn.close()
 
 
-def upsert_agent(agent_ip: str, status: str, last_seen: float = None):
-    """
-    Insert or update an agent row. By default, `last_seen` is set to now for
-    status values other than 'OFFLINE'. When marking an agent OFFLINE we
-    preserve the existing last_seen value (so UI filtering by recent
-    activity still works correctly).
-    """
+def upsert_agent(agent_ip: str, status: str):
     with _LOCK:
         conn = _connect()
         cur = conn.cursor()
-
-        if last_seen is None:
-            if status == 'OFFLINE':
-                # Preserve existing last_seen if present, otherwise set to 0
-                existing = cur.execute(
-                    "SELECT last_seen FROM persisted_agents WHERE agent_ip=?",
-                    (agent_ip,),
-                ).fetchone()
-                last_seen = float(existing["last_seen"]) if existing else 0.0
-            else:
-                last_seen = time.time()
-
         cur.execute(
             """
             INSERT INTO persisted_agents(agent_ip, status, last_seen)
@@ -150,7 +118,7 @@ def upsert_agent(agent_ip: str, status: str, last_seen: float = None):
                 status=excluded.status,
                 last_seen=excluded.last_seen
             """,
-            (agent_ip, status, last_seen),
+            (agent_ip, status, time.time()),
         )
         conn.commit()
         conn.close()
@@ -377,90 +345,6 @@ def fetch_pending_delete_commands(agent_ip: str, limit: int = 20):
                 "payload": json.loads(row["payload_json"]),
             })
         return result
-
-
-def enqueue_task(agent_ip: str, task_id: str, payload: dict):
-    with _LOCK:
-        conn = _connect()
-        cur = conn.cursor()
-        payload_json = json.dumps(payload, sort_keys=True)
-
-        # Prevent duplicate pending tasks for the same agent/task/payload.
-        existing = cur.execute(
-            """
-            SELECT id FROM task_queue
-            WHERE agent_ip=? AND task_id=? AND payload_json=? AND status='pending'
-            LIMIT 1
-            """,
-            (agent_ip, task_id, payload_json),
-        ).fetchone()
-        if existing:
-            conn.close()
-            return int(existing["id"])
-
-        cur.execute(
-            """
-            INSERT INTO task_queue(agent_ip, task_id, payload_json, status, created_at)
-            VALUES (?, ?, ?, 'pending', ?)
-            """,
-            (agent_ip, task_id, payload_json, _now_iso()),
-        )
-        conn.commit()
-        cmd_id = cur.lastrowid
-        conn.close()
-        return cmd_id
-
-
-def fetch_pending_tasks(agent_ip: str, limit: int = 20):
-    limit = max(1, min(int(limit), 100))
-    with _LOCK:
-        conn = _connect()
-        cur = conn.cursor()
-        rows = cur.execute(
-            """
-            SELECT id, payload_json FROM task_queue
-            WHERE agent_ip=? AND status='pending'
-            ORDER BY id ASC
-            LIMIT ?
-            """,
-            (agent_ip, limit),
-        ).fetchall()
-        conn.close()
-        result = []
-        for row in rows:
-            result.append({
-                "id": row["id"],
-                "payload": json.loads(row["payload_json"]),
-            })
-        return result
-
-
-def mark_task_sent(task_id: int):
-    with _LOCK:
-        conn = _connect()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            UPDATE task_queue SET status='sent', sent_at=?, error=NULL WHERE id=?
-            """,
-            (_now_iso(), task_id),
-        )
-        conn.commit()
-        conn.close()
-
-
-def mark_task_failed(task_id: int, error: str):
-    with _LOCK:
-        conn = _connect()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            UPDATE task_queue SET status='failed', error=? WHERE id=?
-            """,
-            (error, task_id),
-        )
-        conn.commit()
-        conn.close()
 
 
 def mark_delete_command_sent(cmd_id: int):

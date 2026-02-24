@@ -91,82 +91,50 @@
                 <div class="card">
                     <div class="card-header">
                         <h5 class="mb-0">
-                            <i class="fas fa-search me-2"></i>
-                            File Scan Configuration
+                            <i class="fas fa-terminal me-2"></i>
+                            Submit Deletion Instruction
                         </h5>
                     </div>
                     <div class="card-body">
-                        <form id="command-form">
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="task-id" class="form-label">
-                                        <i class="fas fa-hashtag me-1"></i>
-                                        Task ID
-                                    </label>
-                                    <input type="text" class="form-control" id="task-id" readonly>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="target-language" class="form-label">
-                                        <i class="fas fa-code me-1"></i>
-                                        Target Language
-                                    </label>
-                                    <select class="form-select" id="target-language">
-                                        <option value="Python">Python</option>
-                                        <option value="Java">Java</option>
-                                        <option value="C++">C++</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                </div>
+                        <div id="scan-form">
+                            <div class="mb-3">
+                                <label for="task_id" class="form-label">Task ID</label>
+                                <input type="text" id="task_id" class="form-control" readonly>
                             </div>
-                            <div id="other-fields" class="mb-3" style="display: none;">
-                                <div class="card bg-light">
-                                    <div class="card-body">
-                                        <h6 class="card-title">Custom Language Details</h6>
-                                        <div class="row">
-                                            <div class="col-md-6 mb-3">
-                                                <label for="other-name" class="form-label">Target Language Name</label>
-                                                <input type="text" class="form-control" id="other-name" placeholder="e.g., MATLAB">
-                                            </div>
-                                            <div class="col-md-6 mb-3">
-                                                <label for="other-keywords" class="form-label">Keywords</label>
-                                                <input type="text" class="form-control" id="other-keywords" placeholder="e.g., function, end">
-                                            </div>
-                                            <div class="col-md-6 mb-3">
-                                                <label for="other-extension" class="form-label">Extension</label>
-                                                <input type="text" class="form-control" id="other-extension" placeholder="e.g., .m">
-                                            </div>
-                                            <div class="col-md-6 mb-3">
-                                                <label for="other-pattern" class="form-label">Pattern</label>
-                                                <input type="text" class="form-control" id="other-pattern" placeholder="e.g., *.m">
-                                            </div>
-                                        </div>
-                                        <button type="button" class="btn btn-outline-primary" id="add-other">
-                                            <i class="fas fa-plus me-1"></i>
-                                            Add Language
-                                        </button>
-                                    </div>
-                                </div>
+                            <div class="mb-3">
+                                <label for="target_language" class="form-label">Target Language</label>
+                                <select id="target_language" class="form-select">
+                                    <option value="">Select Language</option>
+                                    <option value="python">Python</option>
+                                    <option value="matlab">MATLAB</option>
+                                    <option value="c">C</option>
+                                    <option value="cpp">C++</option>
+                                    <option value="java">Java</option>
+                                    <option value="other">Other</option>
+                                </select>
                             </div>
-                            <button type="button" class="btn btn-primary btn-lg" id="scan-btn">
-                                <i class="fas fa-search me-2"></i>
-                                Scan for Files
-                            </button>
-                        </form>
-                        <div id="results-section" class="mt-4" style="display: none;">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h5 class="mb-0">
-                                        <i class="fas fa-list me-2"></i>
-                                        Scan Results
-                                    </h5>
+                            <div id="other-language-form" style="display: none;">
+                                <div class="mb-3">
+                                    <label for="new_lang_name" class="form-label">Target Language</label>
+                                    <input type="text" id="new_lang_name" class="form-control">
                                 </div>
-                                <div class="card-body">
-                                    <div id="results-content">
-                                        <!-- Results will be displayed here -->
-                                    </div>
+                                <div class="mb-3">
+                                    <label for="keywords" class="form-label">Keywords</label>
+                                    <input type="text" id="keywords" class="form-control" placeholder="comma separated">
                                 </div>
+                                <div class="mb-3">
+                                    <label for="extension" class="form-label">Extension</label>
+                                    <input type="text" id="extension" class="form-control" placeholder="e.g., .py">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="pattern" class="form-label">Pattern</label>
+                                    <input type="text" id="pattern" class="form-control" placeholder="regex pattern">
+                                </div>
+                                <button type="button" id="add-lang-btn" class="btn btn-secondary">Add</button>
                             </div>
+                            <button type="button" id="scan-btn" class="btn btn-primary btn-lg">Scan</button>
                         </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -214,17 +182,6 @@
         let agentsData = [];
         let filesData = [];
 
-        function generateTaskId() {
-            // Use secure UUID when available, fallback to timestamp
-            try {
-                const raw = (crypto && crypto.randomUUID) ? crypto.randomUUID() : null;
-                if (raw) return 'TASK-' + raw.slice(0, 8);
-            } catch (e) {
-                // ignore
-            }
-            return 'TASK-' + Date.now().toString(36).toUpperCase();
-        }
-
         // Modal functions
         function showAgentsModal(type) {
             const modal = new bootstrap.Modal(document.getElementById('agentsModal'));
@@ -249,98 +206,6 @@
 
             modalContent.innerHTML = generateFilesTable(filesData);
             modal.show();
-        }
-
-        // Target language dropdown handler
-        document.getElementById('target-language').addEventListener('change', function() {
-            const otherFields = document.getElementById('other-fields');
-            if (this.value === 'Other') {
-                otherFields.style.display = 'block';
-            } else {
-                otherFields.style.display = 'none';
-            }
-        });
-
-        // Add other button handler
-        document.getElementById('add-other').addEventListener('click', function() {
-            const name = document.getElementById('other-name').value.trim();
-            if (!name) {
-                showAlert('Please enter a target language name', 'warning');
-                return;
-            }
-            showAlert('Custom language configuration saved', 'success');
-        });
-
-        // Scan button handler
-        document.getElementById('scan-btn').addEventListener('click', function() {
-            const taskId = document.getElementById('task-id').value;
-            const targetLang = document.getElementById('target-language').value;
-            let scanData = {
-                task_id: taskId,
-                target_language: targetLang
-            };
-
-            if (targetLang === 'Other') {
-                scanData.custom_name = document.getElementById('other-name').value;
-                scanData.keywords = document.getElementById('other-keywords').value;
-                scanData.extension = document.getElementById('other-extension').value;
-                scanData.pattern = document.getElementById('other-pattern').value;
-            }
-
-            // Disable button and show loading
-            const scanBtn = document.getElementById('scan-btn');
-            const originalText = scanBtn.innerHTML;
-            scanBtn.innerHTML = '<div class="loading-spinner me-2"></div>Scanning...';
-            scanBtn.disabled = true;
-
-            fetch('/scan', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(scanData),
-            })
-            .then(response => response.json())
-            .then(data => {
-                scanBtn.innerHTML = originalText;
-                scanBtn.disabled = false;
-                // If server returned a canonical task_id, update field
-                if (data && data.task_id) {
-                    document.getElementById('task-id').value = data.task_id;
-                } else {
-                    // rotate to a fresh autogenerated id for next task
-                    document.getElementById('task-id').value = generateTaskId();
-                }
-                displayResults(data);
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                scanBtn.innerHTML = originalText;
-                scanBtn.disabled = false;
-                showAlert('An error occurred during scanning', 'danger');
-            });
-        });
-
-        function displayResults(data) {
-            const resultsSection = document.getElementById('results-section');
-            const resultsContent = document.getElementById('results-content');
-
-            if (data.error) {
-                resultsContent.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
-            } else {
-                let html = '<div class="alert alert-success">Scan completed successfully.</div>';
-                if (data.results && data.results.length > 0) {
-                    html += '<h6>Found files:</h6><ul class="list-group">';
-                    data.results.forEach(file => {
-                        html += `<li class="list-group-item">${file}</li>`;
-                    });
-                    html += '</ul>';
-                } else {
-                    html += '<p>No files found matching the criteria.</p>';
-                }
-                resultsContent.innerHTML = html;
-            }
-            resultsSection.style.display = 'block';
         }
 
         function generateAgentsTable(agents) {
@@ -440,7 +305,7 @@
             noAgents.style.display = 'none';
 
             Promise.all([
-                fetch('/clients-status').then(r => r.json()),
+                fetch('/client-status').then(r => r.json()),
                 fetch('/files-preview').then(r => r.json())
             ])
             .then(([agents, files]) => {
@@ -519,6 +384,94 @@
             });
         }
 
+        // Generate task ID
+        document.getElementById('task_id').value = 'scan-' + Date.now();
+
+        // Handle language dropdown
+        document.getElementById('target_language').addEventListener('change', function() {
+            const otherForm = document.getElementById('other-language-form');
+            if (this.value === 'other') {
+                otherForm.style.display = 'block';
+            } else {
+                otherForm.style.display = 'none';
+            }
+        });
+
+        // Handle add language
+        let customLanguages = [];
+        document.getElementById('add-lang-btn').addEventListener('click', function() {
+            const name = document.getElementById('new_lang_name').value.trim();
+            const keywords = document.getElementById('keywords').value.trim();
+            const extension = document.getElementById('extension').value.trim();
+            const pattern = document.getElementById('pattern').value.trim();
+            if (name) {
+                customLanguages.push({name, keywords, extension, pattern});
+                showAlert('Language added: ' + name, 'success');
+                // Clear fields
+                document.getElementById('new_lang_name').value = '';
+                document.getElementById('keywords').value = '';
+                document.getElementById('extension').value = '';
+                document.getElementById('pattern').value = '';
+            }
+        });
+
+        // Handle scan button
+        document.getElementById('scan-btn').addEventListener('click', async function() {
+            const taskId = document.getElementById('task_id').value;
+            let targetLanguages = [];
+            const selected = document.getElementById('target_language').value;
+            if (selected && selected !== 'other') {
+                targetLanguages.push(selected);
+            } else if (selected === 'other' && customLanguages.length > 0) {
+                customLanguages.forEach(lang => targetLanguages.push(lang.name));
+            }
+
+            if (targetLanguages.length === 0) {
+                showAlert('Please select or add a target language', 'warning');
+                return;
+            }
+
+            const scanBtn = document.getElementById('scan-btn');
+            const originalText = scanBtn.innerHTML;
+            scanBtn.innerHTML = '<div class="loading-spinner me-2"></div>Scanning...';
+            scanBtn.disabled = true;
+
+            try {
+                const response = await fetch('/submit-instruction', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        target_languages: targetLanguages,
+                        custom_languages: customLanguages
+                    })
+                });
+
+                const result = await response.json();
+                console.log('Scan response:', result); // Debugging
+
+                if (response.ok) {
+                    showAlert('Scan dispatched: ' + result.message, 'success');
+                    // Redirect to verification page after a short delay
+                    setTimeout(() => {
+                        window.location.href = '/verification';
+                    }, 2000);
+                } else {
+                    showAlert('Error: ' + result.error, 'danger');
+                    console.error('Scan error:', result.error); // Debugging
+                }
+            } catch (error) {
+                showAlert('Network error during scan', 'danger');
+                console.error('Fetch error:', error); // Debugging
+            } finally {
+                scanBtn.innerHTML = originalText;
+                scanBtn.disabled = false;
+            }
+        });
+
+        function submitInstruction() {
+            // Old function, can be removed
+        }
+
         function showAlert(message, type) {
             const alertDiv = document.createElement('div');
             alertDiv.className = `alert alert-${type} alert-dismissible alert-custom fade show position-fixed`;
@@ -536,13 +489,9 @@
             }, 5000);
         }
 
-        // Auto-refresh every 30 seconds
-        setInterval(loadAgents, 30000);
+        // Form submission - removed for new form
 
-        window.onload = function() {
-            document.getElementById('task-id').value = generateTaskId();
-            loadAgents();
-        };
+        // Theme toggle functionality
         const themeToggle = document.getElementById('theme-toggle');
         const themeIcon = themeToggle.querySelector('i');
 
@@ -570,7 +519,10 @@
             }
         });
 
-        // (duplicate auto-refresh removed) window onload handled above
+        // Auto-refresh every 30 seconds
+        setInterval(loadAgents, 30000);
+
+        window.onload = loadAgents;
     </script>
 
     <!-- Modals for Detailed Views -->

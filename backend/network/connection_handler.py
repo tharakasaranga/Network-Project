@@ -42,32 +42,12 @@ def _dispatch_queued_delete_commands(agent_ip, conn):
             print(f"[MASTER] Failed queued delete command {cmd_id} -> {agent_ip}: {e}")
             break
 
-
-def _dispatch_queued_tasks(agent_ip, conn):
-    if not persistence:
-        return
-
-    persistence.init_db()
-    tasks = persistence.fetch_pending_tasks(agent_ip)
-    for t in tasks:
-        tid = t.get("id")
-        payload = t.get("payload", {})
-        try:
-            send_message(conn, payload)
-            persistence.mark_task_sent(tid)
-            print(f"[MASTER] Sent queued task {tid} -> {agent_ip}")
-        except Exception as e:
-            persistence.mark_task_failed(tid, str(e))
-            print(f"[MASTER] Failed queued task {tid} -> {agent_ip}: {e}")
-            break
-
 def handle_agent(conn, addr):
     agent_ip, _ = addr
 
     try:
         # Receive and validate registration
         registration = receive_message(conn)
-        print(f"[MASTER] Registration payload from {addr}: {registration}")
         if not registration or registration.get("type") != "register":
             raise Exception("Invalid registration message")
 
@@ -108,10 +88,8 @@ def handle_agent(conn, addr):
                 print(f"[MASTER] Task: {task_id}, Files: {len(files)}")
 
             elif msg_type == "heartbeat":
-                # Keep-alive; touch handled above. Log and dispatch queued items.
-                print(f"[MASTER] Heartbeat from {agent_ip}")
+                # Keep-alive; no action required
                 _dispatch_queued_delete_commands(agent_ip, conn)
-                _dispatch_queued_tasks(agent_ip, conn)
 
             elif msg_type == "deletion_report":
                 task_id = message.get("task_id") or "unknown-task"

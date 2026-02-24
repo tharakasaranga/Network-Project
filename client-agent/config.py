@@ -6,8 +6,8 @@ import logging
 CONFIG = {
     'MASTER_IP': os.getenv('MASTER_IP', '10.17.63.28'),
     'MASTER_PORT': int(os.getenv('MASTER_PORT', 5000)),
-    'CLIENT_ID': 'Tharaka PC',
-    'SCAN_DIRECTORIES': os.getenv('SCAN_DIRS', r'C:\Users\user\Downloads\Network_rprojct').split(','),
+    'CLIENT_ID': os.getenv('CLIENT_ID', socket.gethostname()),
+    'SCAN_DIRECTORIES': os.getenv('SCAN_DIRS', r'\\MyLaptop\Detwork_Test_Run').split(','),
     'QUARANTINE_DIR': os.getenv('QUARANTINE_DIR', '/quarantine'),
     'LOG_DIR': os.getenv('LOG_DIR', '/logs'),
     'HEARTBEAT_INTERVAL': 30,  

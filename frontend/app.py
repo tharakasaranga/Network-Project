@@ -216,22 +216,25 @@ def verification():
 def submit_instruction():
     try:
         data = request.get_json(silent=True) or {}
-        instruction = str(data.get("instruction", "")).strip()
-        target_languages = data.get("target_languages")
+        logger.info(f"Received submit-instruction data: {data}")  # Debugging
+        target_languages = data.get("target_languages", [])
+        custom_languages = data.get("custom_languages", [])
 
         if not target_languages:
-            if not instruction:
-                return jsonify({"error": "Instruction cannot be empty"}), 400
-            target_languages = _infer_languages_from_instruction(instruction)
+            logger.warning("No target_languages provided")  # Debugging
+            return jsonify({"error": "target_languages must be provided"}), 400
 
         target_languages = [str(x).lower().strip() for x in target_languages if str(x).strip()]
-        invalid = [x for x in target_languages if x not in SUPPORTED_LANGUAGES]
+        invalid = [x for x in target_languages if x not in SUPPORTED_LANGUAGES and not any(cl['name'] == x for cl in custom_languages)]
         if invalid:
+            logger.warning(f"Invalid languages: {invalid}")  # Debugging
             return jsonify({"error": f"Unsupported languages: {invalid}"}), 400
 
         task = create_scan_instruction(target_languages=target_languages, date_filter=None)
         active_agents = get_active_agents()
+        logger.info(f"Active agents: {list(active_agents.keys())}")  # Debugging
         if not active_agents:
+            logger.warning("No active agents available")  # Debugging
             return jsonify({"error": "No active agents available"}), 400
 
         dispatched = 0
@@ -240,12 +243,14 @@ def submit_instruction():
             conn = info.get("conn")
             if conn is None:
                 failed.append(agent_ip)
+                logger.warning(f"No connection for agent {agent_ip}")  # Debugging
                 continue
 
             try:
                 send_message(conn, task)
                 update_status(agent_ip, "SCANNING")
                 dispatched += 1
+                logger.info(f"Dispatched to {agent_ip}")  # Debugging
             except Exception as e:
                 failed.append(agent_ip)
                 logger.error("Failed dispatch to %s: %s", agent_ip, e)
@@ -262,7 +267,14 @@ def submit_instruction():
         return jsonify({"error": "Internal server error"}), 500
 
 
-@app.route("/clients-status", methods=["GET"])
+@app.route("/get-scan-results", methods=["GET"])
+def get_scan_results():
+    task_id = request.args.get("task_id")
+    if not task_id:
+        return jsonify({"error": "task_id required"}), 400
+    results = [r for r in persistence.list_pending_files() if r.get("task_id") == task_id]
+    return jsonify({"results": results})
+@app.route("/client-status", methods=["GET"])
 def clients_status():
     try:
         status_list = []
@@ -510,4 +522,4 @@ if __name__ == "__main__":
     # Avoid duplicate server thread under Flask debug reloader.
     if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or os.getenv("FLASK_DEBUG", "0") != "1":
         _start_master_thread_if_enabled()
-    app.run(host='0.0.0.0', debug=True)
+    app.run(debug=False)
